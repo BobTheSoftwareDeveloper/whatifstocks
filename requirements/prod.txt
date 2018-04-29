@@ -1,0 +1,39 @@
+# Everything needed in production
+
+setuptools==39.0.0
+wheel==0.30.0
+
+# Flask
+Flask==0.12.2
+MarkupSafe==1.0
+Werkzeug==0.14.1
+Jinja2==2.10
+itsdangerous==0.24
+click>=6.7
+
+# Database
+psycopg2cffi-compat
+Flask-SQLAlchemy==2.3.2
+psycopg2==2.7.3
+SQLAlchemy==1.2.5
+
+# Migrations
+Flask-Migrate==2.1.1
+
+# Mail
+Flask-Mail==0.9.1
+git+https://github.com/klokantech/flask-mailgun@v1.4
+
+# Deployment
+gunicorn>=19.7.1
+
+# Assets
+Flask-Assets==0.12
+cssmin>=0.2.0
+jsmin>=2.2.2
+
+# Debug toolbar
+Flask-DebugToolbar==0.10.1
+
+# Scraping
+requests
