@@ -74,6 +74,16 @@ class Config(object):
         '\n'
         '%(message)s\n')
 
+    STOCKANALYSIS_MONTHLY_PRICES_URL_PATTERN = os_env.get(
+        'WHATIFSTOCKS_STOCKANALYSIS_MONTHLY_PRICES_URL_PATTERN',
+        (
+            'https://www.alphavantage.co/query?'
+            'function=TIME_SERIES_MONTHLY_ADJUSTED&symbol={0}.{1}&'
+            'apikey={2}'))
+    STOCKANALYSIS_ALPHAVANTAGE_APIKEY = os_env.get(
+        'WHATIFSTOCKS_STOCKANALYSIS_ALPHAVANTAGE_APIKEY',
+        'A1B2C3D4E5F6G7H8')
+
 
 class ProdConfig(Config):
     """Production configuration."""
