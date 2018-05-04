@@ -6,7 +6,7 @@ from whatifstocks.extensions import db
 class Exchange(SurrogatePK, Titled, Model):
     __tablename__ = 'exchange'
 
-    yahoo_markets_suffix = db.Column(
+    exchange_symbol = db.Column(
         db.String(255), nullable=False, default='')
 
     stocks = db.relationship(
@@ -15,13 +15,13 @@ class Exchange(SurrogatePK, Titled, Model):
 
     __table_args__ = (
         db.UniqueConstraint(
-            'yahoo_markets_suffix', name='_exch_suffix_uc'),)
+            'exchange_symbol', name='_exch_symbol_uc'),)
 
     def __repr__(self):
         return ((
-            'Exchange(id={0}, yahoo_markets_suffix="{1}", '
+            'Exchange(id={0}, exchange_symbol="{1}", '
             'title="{2}")').format(
-                self.id, self.yahoo_markets_suffix, self.title))
+                self.id, self.exchange_symbol, self.title))
 
 
 class Stock(SurrogatePK, Titled, Model):
