@@ -24,12 +24,30 @@ class Exchange(SurrogatePK, Titled, Model):
                 self.id, self.exchange_symbol, self.title))
 
 
+class IndustrySector(SurrogatePK, Titled, Model):
+    __tablename__ = 'industry_sector'
+
+    stocks = db.relationship(
+        'Stock', backref=db.backref('industry_sector'),
+        cascade="all, delete-orphan", lazy='dynamic')
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            'title', name='_sector_title_uc'),)
+
+    def __repr__(self):
+        return ((
+            'IndustrySector(id={0}, title="{1}")').format(
+                self.id, self.title))
+
+
 class Stock(SurrogatePK, Titled, Model):
     __tablename__ = 'stock'
 
     ticker_symbol = db.Column(
         db.String(255), nullable=False, default='')
     exchange_id = reference_col('exchange')
+    industry_sector_id = reference_col('industry_sector')
 
     stock_monthly_prices = db.relationship(
         'StockMonthlyPrice', backref=db.backref('stock'),

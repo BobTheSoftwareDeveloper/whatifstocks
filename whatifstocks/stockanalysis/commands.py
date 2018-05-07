@@ -7,10 +7,11 @@ import click
 from flask import current_app as app
 from flask.cli import with_appcontext
 import requests
+import unicodecsv as csv
 
 from whatifstocks.extensions import db
-from whatifstocks.stockanalysis.models import (Exchange, Stock,
-                                               StockMonthlyPrice)
+from whatifstocks.stockanalysis.models import (Exchange, IndustrySector,
+                                               Stock, StockMonthlyPrice)
 
 
 @click.group()
@@ -130,13 +131,24 @@ def download_stock_monthly_prices(
               help='Exchange symbol')
 @click.option('--ticker-symbols-file', type=click.File('r'),
               help='Stock tickers text file')
+@click.option('--monthly-prices-file', type=click.File('rb'),
+              help='Monthly prices file')
+@click.option('--company-info-file', type=click.File('rb'),
+              help='Company info file')
 @with_appcontext
 def import_stocks_and_monthly_prices(
-        exchange_symbol, ticker_symbols_file):
+        exchange_symbol, ticker_symbols_file, monthly_prices_file,
+        company_info_file):
     """Import stocks and monthly prices."""
     if not ticker_symbols_file:
         raise click.BadParameter(
             '--ticker-symbols-file option is required')
+    if not monthly_prices_file:
+        raise click.BadParameter(
+            '--monthly-prices-file option is required')
+    if not company_info_file:
+        raise click.BadParameter(
+            '--company-info-file option is required')
 
     exch = (Exchange.query
                     .filter_by(exchange_symbol=exchange_symbol)
@@ -146,56 +158,104 @@ def import_stocks_and_monthly_prices(
         raise click.BadParameter('Exchange "{0}" not found'.format(
             exchange_symbol))
 
+    company_info_csv = csv.DictReader(
+        company_info_file, encoding='utf-8-sig')
+    company_info_by_ticker_symbol = {}
+
+    for line in company_info_csv:
+        ticker_symbol = line['ticker_symbol'].strip()
+        if ticker_symbol not in company_info_by_ticker_symbol:
+            company_info_by_ticker_symbol[ticker_symbol] = {
+                'title': line['title'].strip(),
+                'sector': line['sector'].strip()}
+
+    company_info_ticker_symbols = set(company_info_by_ticker_symbol.keys())
+
     ticker_symbols_raw = ticker_symbols_file.readlines()
-    ticker_symbols = [l.replace('\n', '') for l in ticker_symbols_raw]
+    ticker_symbols = {l.replace('\n', '') for l in ticker_symbols_raw}
+
+    ticker_symbols_lacking_company_info = ticker_symbols - company_info_ticker_symbols
+
+    if ticker_symbols_lacking_company_info:
+        raise click.BadParameter(
+            'Missing company info for: {0}'.format(
+                str(ticker_symbols_lacking_company_info)))
+
+    ind_sectors_by_title = {}
 
     click.echo('{0} ticker symbols to process'.format(len(ticker_symbols)))
 
-    monthly_prices_url_pattern = app.config[
-        'STOCKANALYSIS_MONTHLY_PRICES_URL_PATTERN']
-    alphavantage_apikey = app.config['STOCKANALYSIS_ALPHAVANTAGE_APIKEY']
+    monthly_prices_csv = csv.DictReader(
+        monthly_prices_file, encoding='utf-8-sig')
 
-    with \
-            click.progressbar(
-                ticker_symbols,
-                label='Importing stocks and monthly prices') \
-            as bar:
-        for ticker_symbol in bar:
-            if (Stock.query
-                     .filter_by(
-                         exchange=exch,
-                         ticker_symbol=ticker_symbol)
-                     .first()):
+    num_prices = 0
+
+    for i, line in enumerate(monthly_prices_csv):
+        num_prices += 1
+
+    click.echo('Monthly prices file scanned, {0} prices in file'.format(
+        num_prices))
+
+    monthly_prices_file.seek(0)
+    monthly_prices_csv = csv.DictReader(
+        monthly_prices_file, encoding='utf-8-sig')
+
+    with click.progressbar(monthly_prices_csv,
+                           length=num_prices,
+                           label='Importing monthly prices') as bar:
+        stock = None
+
+        for monthly_price_raw in bar:
+            ticker_symbol = monthly_price_raw['ticker_symbol']
+
+            if ticker_symbol not in ticker_symbols:
                 raise click.BadParameter(
-                    'Stock "{0}" already exists'.format(ticker_symbol))
+                    'Ticker symbol "{0}" not found'.format(ticker_symbol))
 
-            monthly_prices_url = monthly_prices_url_pattern.format(
-                ticker_symbol, exchange_symbol, alphavantage_apikey)
+            if stock is not None and stock.ticker_symbol != ticker_symbol:
+                db.session.commit()
 
-            r = requests.get(monthly_prices_url)
-            monthly_prices_json = r.json()
+            if stock is None or stock.ticker_symbol != ticker_symbol:
+                stock = (Stock.query
+                              .filter_by(
+                                  exchange=exch,
+                                  ticker_symbol=ticker_symbol)
+                              .first())
 
-            try:
-                monthly_prices_raw = (
-                    monthly_prices_json['Monthly Adjusted Time Series'])
-            except KeyError:
-                raise click.BadParameter(
-                    'URL: "{0}"; Stock: "{1}"; json: {2}'.format(monthly_prices_url, ticker_symbol, monthly_prices_json))
+            if not stock:
+                company_info = company_info_by_ticker_symbol[ticker_symbol]
+                ind_sector_title = company_info['sector']
 
-            stock = Stock.create(
-                exchange=exch, ticker_symbol=ticker_symbol)
+                if not ind_sector_title:
+                    raise click.BadParameter(
+                        'Missing sector for {0}'.format(ticker_symbol))
 
-            for close_at_raw, prices_raw in monthly_prices_raw.items():
-                close_at = date(*[
-                    int(n.lstrip('0')) for n in close_at_raw.split('-')])
-                close_price = Decimal(prices_raw['5. adjusted close'])
+                if ind_sector_title not in ind_sectors_by_title:
+                    ind_sector = IndustrySector(title=ind_sector_title)
+                    db.session.add(ind_sector)
+                    ind_sectors_by_title[ind_sector_title] = ind_sector
+                else:
+                    ind_sector = ind_sectors_by_title[ind_sector_title]
 
-                smp = StockMonthlyPrice(
-                    stock=stock, close_at=close_at,
-                    close_price=close_price)
+                stock = Stock(
+                    exchange=exch, ticker_symbol=ticker_symbol,
+                    title=company_info['title'],
+                    industry_sector=ind_sector)
+                db.session.add(stock)
 
-                db.session.add(smp)
+            close_at_raw = monthly_price_raw['close_at']
+            close_at = date(*[
+                int(n.lstrip('0')) for n in close_at_raw.split('-')])
 
-            db.session.commit()
+            close_price_raw = monthly_price_raw['close_price']
+            close_price = Decimal(close_price_raw)
 
-            sleep(1)
+            smp = StockMonthlyPrice(
+                stock=stock, close_at=close_at,
+                close_price=close_price)
+
+            db.session.add(smp)
+
+        db.session.commit()
+
+    click.echo('Done!')
