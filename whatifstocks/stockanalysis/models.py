@@ -58,6 +58,13 @@ class Stock(SurrogatePK, Titled, Model):
             'exchange_id', 'ticker_symbol',
             name='_stock_eid_symbol_uc'),)
 
+    def __repr__(self):
+        return ((
+            'Stock(id={0}, ticker_symbol="{1}", '
+            'title="{2}", exchange_id={3}, industry_sector_id={4})').format(
+                self.id, self.ticker_symbol, self.title,
+                self.exchange_id, self.industry_sector_id))
+
 
 class StockMonthlyPrice(SurrogatePK, Model):
     __tablename__ = 'stock_monthly_price'
@@ -69,3 +76,9 @@ class StockMonthlyPrice(SurrogatePK, Model):
     __table_args__ = (
         db.UniqueConstraint(
             'stock_id', 'close_at', name='_smp_sid_price_uc'),)
+
+    def __repr__(self):
+        return ((
+            'StockMonthlyPrice(id={0}, close_at={1}, '
+            'close_price={2}, stock_id={3})').format(
+                self.id, self.close_at, self.close_price, self.stock_id))
