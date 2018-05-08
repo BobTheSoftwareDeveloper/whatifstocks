@@ -2,6 +2,8 @@
 
 Based on a start and end period, and a pool of stocks and historical prices, calculates what would have been the best stocks to invest in for the given period.
 
+Here's a [demo of the app in action](https://whatifstocks.herokuapp.com/).
+
 
 ## Quickstart
 
