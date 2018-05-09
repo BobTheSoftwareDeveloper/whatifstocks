@@ -126,6 +126,55 @@ def download_stock_monthly_prices(
     click.echo('Done!')
 
 
+@stockanalysis.command()
+@click.option('--exchange-symbol', prompt=True,
+              help='Exchange symbol')
+@click.option('--company-info-file', type=click.File('rb'),
+              help='Company info file')
+@with_appcontext
+def import_stocks(exchange_symbol, company_info_file):
+    """Import stocks."""
+    if not company_info_file:
+        raise click.BadParameter(
+            '--company-info-file option is required')
+
+    exch = (Exchange.query
+                    .filter_by(exchange_symbol=exchange_symbol)
+                    .first())
+
+    if not exch:
+        raise click.BadParameter('Exchange "{0}" not found'.format(
+            exchange_symbol))
+
+    ind_sectors_by_title = {}
+    company_info_csv = csv.DictReader(
+        company_info_file, encoding='utf-8-sig')
+
+    for line in company_info_csv:
+        ticker_symbol = line['ticker_symbol'].strip()
+        company_title = line['title'].strip()
+        ind_sector_title = line['sector'].strip()
+
+        if not ind_sector_title:
+            raise click.BadParameter(
+                'Missing sector for {0}'.format(ticker_symbol))
+
+        if ind_sector_title not in ind_sectors_by_title:
+            ind_sector = IndustrySector(title=ind_sector_title)
+            db.session.add(ind_sector)
+            ind_sectors_by_title[ind_sector_title] = ind_sector
+        else:
+            ind_sector = ind_sectors_by_title[ind_sector_title]
+
+        stock = Stock(
+            exchange=exch, ticker_symbol=ticker_symbol,
+            title=company_title,
+            industry_sector=ind_sector)
+        db.session.add(stock)
+
+    db.session.commit()
+
+
 def create_stock_yearly_prices(stock, prices_by_year):
     """Create stock yearly prices."""
     for year, prices in prices_by_year.items():
