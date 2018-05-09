@@ -5,15 +5,15 @@ from sqlalchemy.sql import func
 from whatifstocks.extensions import db
 from whatifstocks.stockanalysis.models import (Stock, Exchange,
                                                IndustrySector,
-                                               StockMonthlyPrice)
+                                               StockYearlyPrice)
 
 
 def yeartoyear_price_percent_change_query(exchange_id, from_year, to_year):
     """Query percent change in prices between from and to year."""
     s_t = Stock.__table__.alias('stock')
     is_t = IndustrySector.__table__.alias('industry_sector')
-    smp_from_t = StockMonthlyPrice.__table__.alias('smp_from')
-    smp_to_t = StockMonthlyPrice.__table__.alias('smp_to')
+    syp_from_t = StockYearlyPrice.__table__.alias('syp_from')
+    syp_to_t = StockYearlyPrice.__table__.alias('syp_to')
 
     avg_close_price_from_col = text(
         'ROUND(CAST(prices_from.avg_close_price AS numeric), 2) '
@@ -45,23 +45,23 @@ def yeartoyear_price_percent_change_query(exchange_id, from_year, to_year):
     prices_from_sq = (
         select(
             [
-                smp_from_t.c.stock_id.label('stock_id'),
-                func.avg(smp_from_t.c.close_price).label('avg_close_price')],
+                syp_from_t.c.stock_id.label('stock_id'),
+                func.avg(syp_from_t.c.close_price).label('avg_close_price')],
             use_labels=True)
-            .select_from(smp_from_t)
-            .where(func.extract('year', smp_from_t.c.close_at) == from_year)
-            .group_by(smp_from_t.c.stock_id)
+            .select_from(syp_from_t)
+            .where(func.extract('year', syp_from_t.c.close_at) == from_year)
+            .group_by(syp_from_t.c.stock_id)
             .alias('prices_from'))
 
     prices_to_sq = (
         select(
             [
-                smp_to_t.c.stock_id.label('stock_id'),
-                func.avg(smp_to_t.c.close_price).label('avg_close_price')],
+                syp_to_t.c.stock_id.label('stock_id'),
+                func.avg(syp_to_t.c.close_price).label('avg_close_price')],
             use_labels=True)
-            .select_from(smp_to_t)
-            .where(func.extract('year', smp_to_t.c.close_at) == to_year)
-            .group_by(smp_to_t.c.stock_id)
+            .select_from(syp_to_t)
+            .where(func.extract('year', syp_to_t.c.close_at) == to_year)
+            .group_by(syp_to_t.c.stock_id)
             .alias('prices_to'))
 
     from_query = (

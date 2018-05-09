@@ -49,8 +49,8 @@ class Stock(SurrogatePK, Titled, Model):
     exchange_id = reference_col('exchange')
     industry_sector_id = reference_col('industry_sector')
 
-    stock_monthly_prices = db.relationship(
-        'StockMonthlyPrice', backref=db.backref('stock'),
+    stock_yearly_prices = db.relationship(
+        'StockYearlyPrice', backref=db.backref('stock'),
         cascade="all, delete-orphan", lazy='dynamic')
 
     __table_args__ = (
@@ -66,8 +66,8 @@ class Stock(SurrogatePK, Titled, Model):
                 self.exchange_id, self.industry_sector_id))
 
 
-class StockMonthlyPrice(SurrogatePK, Model):
-    __tablename__ = 'stock_monthly_price'
+class StockYearlyPrice(SurrogatePK, Model):
+    __tablename__ = 'stock_yearly_price'
 
     close_at = db.Column(db.Date(), nullable=False)
     close_price = db.Column(db.Numeric(12,4), nullable=False)
@@ -75,10 +75,10 @@ class StockMonthlyPrice(SurrogatePK, Model):
 
     __table_args__ = (
         db.UniqueConstraint(
-            'stock_id', 'close_at', name='_smp_sid_price_uc'),)
+            'stock_id', 'close_at', name='_syp_sid_price_uc'),)
 
     def __repr__(self):
         return ((
-            'StockMonthlyPrice(id={0}, close_at={1}, '
+            'StockYearlyPrice(id={0}, close_at={1}, '
             'close_price={2}, stock_id={3})').format(
                 self.id, self.close_at, self.close_price, self.stock_id))

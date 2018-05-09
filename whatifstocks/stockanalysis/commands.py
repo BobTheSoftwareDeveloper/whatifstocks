@@ -11,7 +11,7 @@ import unicodecsv as csv
 
 from whatifstocks.extensions import db
 from whatifstocks.stockanalysis.models import (Exchange, IndustrySector,
-                                               Stock, StockMonthlyPrice)
+                                               Stock, StockYearlyPrice)
 
 
 @click.group()
@@ -126,6 +126,21 @@ def download_stock_monthly_prices(
     click.echo('Done!')
 
 
+def create_stock_yearly_prices(stock, prices_by_year):
+    """Create stock yearly prices."""
+    for year, prices in prices_by_year.items():
+        close_at = date(year, 1, 1)
+        close_price = sum(prices) / Decimal(len(prices))
+
+        syp = StockYearlyPrice(
+            stock=stock, close_at=close_at,
+            close_price=close_price)
+
+        db.session.add(syp)
+
+    db.session.commit()
+
+
 @stockanalysis.command()
 @click.option('--exchange-symbol', prompt=True,
               help='Exchange symbol')
@@ -204,6 +219,7 @@ def import_stocks_and_monthly_prices(
                            length=num_prices,
                            label='Importing monthly prices') as bar:
         stock = None
+        prices_by_year = {}
 
         for monthly_price_raw in bar:
             ticker_symbol = monthly_price_raw['ticker_symbol']
@@ -213,7 +229,8 @@ def import_stocks_and_monthly_prices(
                     'Ticker symbol "{0}" not found'.format(ticker_symbol))
 
             if stock is not None and stock.ticker_symbol != ticker_symbol:
-                db.session.commit()
+                create_stock_yearly_prices(stock, prices_by_year)
+                prices_by_year = {}
 
             if stock is None or stock.ticker_symbol != ticker_symbol:
                 stock = (Stock.query
@@ -244,18 +261,16 @@ def import_stocks_and_monthly_prices(
                 db.session.add(stock)
 
             close_at_raw = monthly_price_raw['close_at']
-            close_at = date(*[
-                int(n.lstrip('0')) for n in close_at_raw.split('-')])
+            close_at_year = int(close_at_raw.split('-')[0].lstrip('0'))
 
             close_price_raw = monthly_price_raw['close_price']
             close_price = Decimal(close_price_raw)
 
-            smp = StockMonthlyPrice(
-                stock=stock, close_at=close_at,
-                close_price=close_price)
+            if close_at_year not in prices_by_year:
+                prices_by_year[close_at_year] = []
 
-            db.session.add(smp)
+            prices_by_year[close_at_year].append(close_price)
 
-        db.session.commit()
+        create_stock_yearly_prices(stock, prices_by_year)
 
     click.echo('Done!')
