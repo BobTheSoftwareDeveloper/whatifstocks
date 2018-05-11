@@ -127,6 +127,51 @@ def download_stock_monthly_prices(
 
 
 @stockanalysis.command()
+@click.option('--ticker-symbols-file', type=click.File('r'),
+              help='Stock tickers text file')
+@click.option('--company-info-input-file', type=click.File('rb'),
+              help='Company info input file')
+@click.option('--company-info-output-file', type=click.File('w'),
+              help='Company info output file')
+@with_appcontext
+def reduce_company_info_file(
+        ticker_symbols_file, company_info_input_file, company_info_output_file):
+    """Reduce the company info file."""
+    if not ticker_symbols_file:
+        raise click.BadParameter(
+            '--ticker-symbols-file option is required')
+    if not company_info_input_file:
+        raise click.BadParameter(
+            '--company-info-input-file option is required')
+    if not company_info_output_file:
+        raise click.BadParameter(
+            '--company-info-output-file option is required')
+
+    ticker_symbols_raw = ticker_symbols_file.readlines()
+    ticker_symbols = {l.replace('\n', '') for l in ticker_symbols_raw}
+
+    click.echo('{0} ticker symbols to process'.format(len(ticker_symbols)))
+
+    ind_sectors_by_title = {}
+    company_info_input_csv = csv.DictReader(
+        company_info_input_file, encoding='utf-8-sig')
+
+    company_info_output_file.write(
+        'ticker_symbol,title,sector\n')
+
+    for line in company_info_input_csv:
+        ticker_symbol = line['ticker_symbol'].strip()
+        company_title = line['title'].strip()
+        ind_sector_title = line['sector'].strip()
+
+        if ticker_symbol in ticker_symbols:
+            company_info_output_file.write('{0},{1},{2}\n'.format(
+                ticker_symbol, company_title, ind_sector_title))
+
+    click.echo('Done!')
+
+
+@stockanalysis.command()
 @click.option('--exchange-symbol', prompt=True,
               help='Exchange symbol')
 @click.option('--company-info-file', type=click.File('rb'),
@@ -174,6 +219,8 @@ def import_stocks(exchange_symbol, company_info_file):
 
     db.session.commit()
 
+    click.echo('Done!')
+
 
 def create_stock_yearly_prices(stock, prices_by_year):
     """Create stock yearly prices."""
@@ -193,26 +240,14 @@ def create_stock_yearly_prices(stock, prices_by_year):
 @stockanalysis.command()
 @click.option('--exchange-symbol', prompt=True,
               help='Exchange symbol')
-@click.option('--ticker-symbols-file', type=click.File('r'),
-              help='Stock tickers text file')
 @click.option('--monthly-prices-file', type=click.File('rb'),
               help='Monthly prices file')
-@click.option('--company-info-file', type=click.File('rb'),
-              help='Company info file')
 @with_appcontext
-def import_stocks_and_monthly_prices(
-        exchange_symbol, ticker_symbols_file, monthly_prices_file,
-        company_info_file):
-    """Import stocks and monthly prices."""
-    if not ticker_symbols_file:
-        raise click.BadParameter(
-            '--ticker-symbols-file option is required')
+def import_monthly_prices(exchange_symbol, monthly_prices_file):
+    """Import monthly prices."""
     if not monthly_prices_file:
         raise click.BadParameter(
             '--monthly-prices-file option is required')
-    if not company_info_file:
-        raise click.BadParameter(
-            '--company-info-file option is required')
 
     exch = (Exchange.query
                     .filter_by(exchange_symbol=exchange_symbol)
@@ -221,33 +256,6 @@ def import_stocks_and_monthly_prices(
     if not exch:
         raise click.BadParameter('Exchange "{0}" not found'.format(
             exchange_symbol))
-
-    company_info_csv = csv.DictReader(
-        company_info_file, encoding='utf-8-sig')
-    company_info_by_ticker_symbol = {}
-
-    for line in company_info_csv:
-        ticker_symbol = line['ticker_symbol'].strip()
-        if ticker_symbol not in company_info_by_ticker_symbol:
-            company_info_by_ticker_symbol[ticker_symbol] = {
-                'title': line['title'].strip(),
-                'sector': line['sector'].strip()}
-
-    company_info_ticker_symbols = set(company_info_by_ticker_symbol.keys())
-
-    ticker_symbols_raw = ticker_symbols_file.readlines()
-    ticker_symbols = {l.replace('\n', '') for l in ticker_symbols_raw}
-
-    ticker_symbols_lacking_company_info = ticker_symbols - company_info_ticker_symbols
-
-    if ticker_symbols_lacking_company_info:
-        raise click.BadParameter(
-            'Missing company info for: {0}'.format(
-                str(ticker_symbols_lacking_company_info)))
-
-    ind_sectors_by_title = {}
-
-    click.echo('{0} ticker symbols to process'.format(len(ticker_symbols)))
 
     monthly_prices_csv = csv.DictReader(
         monthly_prices_file, encoding='utf-8-sig')
@@ -273,10 +281,6 @@ def import_stocks_and_monthly_prices(
         for monthly_price_raw in bar:
             ticker_symbol = monthly_price_raw['ticker_symbol']
 
-            if ticker_symbol not in ticker_symbols:
-                raise click.BadParameter(
-                    'Ticker symbol "{0}" not found'.format(ticker_symbol))
-
             if stock is not None and stock.ticker_symbol != ticker_symbol:
                 create_stock_yearly_prices(stock, prices_by_year)
                 prices_by_year = {}
@@ -289,25 +293,9 @@ def import_stocks_and_monthly_prices(
                               .first())
 
             if not stock:
-                company_info = company_info_by_ticker_symbol[ticker_symbol]
-                ind_sector_title = company_info['sector']
-
-                if not ind_sector_title:
-                    raise click.BadParameter(
-                        'Missing sector for {0}'.format(ticker_symbol))
-
-                if ind_sector_title not in ind_sectors_by_title:
-                    ind_sector = IndustrySector(title=ind_sector_title)
-                    db.session.add(ind_sector)
-                    ind_sectors_by_title[ind_sector_title] = ind_sector
-                else:
-                    ind_sector = ind_sectors_by_title[ind_sector_title]
-
-                stock = Stock(
-                    exchange=exch, ticker_symbol=ticker_symbol,
-                    title=company_info['title'],
-                    industry_sector=ind_sector)
-                db.session.add(stock)
+                raise click.BadParameter(
+                    'No stock found for ticker symbol "{0}"'.format(
+                        ticker_symbol))
 
             close_at_raw = monthly_price_raw['close_at']
             close_at_year = int(close_at_raw.split('-')[0].lstrip('0'))
