@@ -1,6 +1,7 @@
 """stockanalysis commands."""
 from datetime import date
 from decimal import Decimal
+import io
 from time import sleep
 
 import click
@@ -237,6 +238,44 @@ def create_stock_yearly_prices(stock, prices_by_year):
     db.session.commit()
 
 
+def _import_monthly_prices(exch, monthly_prices):
+    """Do import of monthly prices."""
+    stock = None
+    prices_by_year = {}
+
+    for monthly_price_raw in monthly_prices:
+        ticker_symbol = monthly_price_raw['ticker_symbol']
+
+        if stock is not None and stock.ticker_symbol != ticker_symbol:
+            create_stock_yearly_prices(stock, prices_by_year)
+            prices_by_year = {}
+
+        if stock is None or stock.ticker_symbol != ticker_symbol:
+            stock = (Stock.query
+                          .filter_by(
+                              exchange=exch,
+                              ticker_symbol=ticker_symbol)
+                          .first())
+
+        if not stock:
+            raise click.BadParameter(
+                'No stock found for ticker symbol "{0}"'.format(
+                    ticker_symbol))
+
+        close_at_raw = monthly_price_raw['close_at']
+        close_at_year = int(close_at_raw.split('-')[0].lstrip('0'))
+
+        close_price_raw = monthly_price_raw['close_price']
+        close_price = Decimal(close_price_raw)
+
+        if close_at_year not in prices_by_year:
+            prices_by_year[close_at_year] = []
+
+        prices_by_year[close_at_year].append(close_price)
+
+    create_stock_yearly_prices(stock, prices_by_year)
+
+
 @stockanalysis.command()
 @click.option('--exchange-symbol', prompt=True,
               help='Exchange symbol')
@@ -257,57 +296,35 @@ def import_monthly_prices(exchange_symbol, monthly_prices_file):
         raise click.BadParameter('Exchange "{0}" not found'.format(
             exchange_symbol))
 
+    try:
+        monthly_prices_file.seek(0)
+        is_seek_supported = True
+    except io.UnsupportedOperation:
+        is_seek_supported = False
+
     monthly_prices_csv = csv.DictReader(
         monthly_prices_file, encoding='utf-8-sig')
 
     num_prices = 0
 
-    for i, line in enumerate(monthly_prices_csv):
-        num_prices += 1
+    if is_seek_supported:
+        for i, line in enumerate(monthly_prices_csv):
+            num_prices += 1
 
-    click.echo('Monthly prices file scanned, {0} prices in file'.format(
-        num_prices))
+        click.echo('Monthly prices file scanned, {0} prices in file'.format(
+            num_prices))
 
-    monthly_prices_file.seek(0)
+        monthly_prices_file.seek(0)
+
     monthly_prices_csv = csv.DictReader(
         monthly_prices_file, encoding='utf-8-sig')
 
-    with click.progressbar(monthly_prices_csv,
-                           length=num_prices,
-                           label='Importing monthly prices') as bar:
-        stock = None
-        prices_by_year = {}
-
-        for monthly_price_raw in bar:
-            ticker_symbol = monthly_price_raw['ticker_symbol']
-
-            if stock is not None and stock.ticker_symbol != ticker_symbol:
-                create_stock_yearly_prices(stock, prices_by_year)
-                prices_by_year = {}
-
-            if stock is None or stock.ticker_symbol != ticker_symbol:
-                stock = (Stock.query
-                              .filter_by(
-                                  exchange=exch,
-                                  ticker_symbol=ticker_symbol)
-                              .first())
-
-            if not stock:
-                raise click.BadParameter(
-                    'No stock found for ticker symbol "{0}"'.format(
-                        ticker_symbol))
-
-            close_at_raw = monthly_price_raw['close_at']
-            close_at_year = int(close_at_raw.split('-')[0].lstrip('0'))
-
-            close_price_raw = monthly_price_raw['close_price']
-            close_price = Decimal(close_price_raw)
-
-            if close_at_year not in prices_by_year:
-                prices_by_year[close_at_year] = []
-
-            prices_by_year[close_at_year].append(close_price)
-
-        create_stock_yearly_prices(stock, prices_by_year)
+    if is_seek_supported:
+        with click.progressbar(monthly_prices_csv,
+                               length=num_prices,
+                               label='Importing monthly prices') as bar:
+            _import_monthly_prices(exch, bar)
+    else:
+        _import_monthly_prices(exch, monthly_prices_csv)
 
     click.echo('Done!')
