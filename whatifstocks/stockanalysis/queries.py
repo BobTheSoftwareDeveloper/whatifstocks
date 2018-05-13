@@ -1,5 +1,5 @@
 """Stock analysis queries."""
-from sqlalchemy import select, text
+from sqlalchemy import and_, select, text
 from sqlalchemy.sql import func
 
 from whatifstocks.extensions import db
@@ -77,7 +77,10 @@ def yeartoyear_price_percent_change_query(exchange_id, from_year, to_year):
     query = (
         select(select_cols, use_labels=True)
             .select_from(from_query)
-            .where(s_t.c.exchange_id == exchange_id)
+            .where(and_(
+                s_t.c.exchange_id == exchange_id,
+                text('ROUND(CAST(prices_from.avg_close_price AS numeric), 2) > 0.0'),
+                text('ROUND(CAST(prices_to.avg_close_price AS numeric), 2) > 0.0')))
             .group_by(*group_by_cols)
             .order_by(text('price_change_percent DESC')))
 

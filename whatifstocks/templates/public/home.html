@@ -5,6 +5,7 @@
   <div class="row">
     <div class="col-sm-12">
 
+{% if not exchange %}
 <div class="jumbotron">
 
   <p class="text-center">
@@ -16,6 +17,36 @@
   </p>
 
 </div><!-- /.jumbotron -->
+{% endif %}{# not exchange #}
+
+{% if exchanges %}
+<form class="well form-inline" method="GET">
+
+  <div class="form-group" style="margin-right: 20px">
+    <label for="exchange-symbol">Exchange</label>
+    <select name="exchange_symbol" id="exchange-symbol" class="form-control" style="width: 300px">
+
+      <option value="">-----</option>
+    {% for e in exchanges %}
+      <option value="{{ e.exchange_symbol }}"{% if exchange and (e.exchange_symbol == exchange.exchange_symbol) %} selected="selected"{% endif %}>{{ e.title }} ({{ e.exchange_symbol }})</option>
+    {% endfor %}{# e in exchanges #}
+    </select>
+  </div><!-- /.form-group -->
+
+  <div class="form-group" style="margin-right: 20px">
+    <label for="from-year">From year</label>
+    <input type="text" name="from_year" id="from-year" class="form-control" value="{% if from_year %}{{ from_year }}{% endif %}" style="width: 100px">
+  </div><!-- /.form-group -->
+
+  <div class="form-group" style="margin-right: 20px">
+    <label for="to-year">To year</label>
+    <input type="text" name="to_year" id="to-year" class="form-control" value="{% if to_year %}{{ to_year }}{% endif %}" style="width: 100px">
+  </div><!-- /.form-group -->
+
+  <button type="submit" class="btn btn-primary">Get price changes</button>
+
+</form>
+{% endif %}{# exchanges #}
 
 {% if exchange %}
 <h2>{{ exchange.title }} ({{ exchange.exchange_symbol }})</h2>
