@@ -56,24 +56,28 @@
 <table class="table table-responsive table-striped table-hover">
   <thead>
     <tr>
+      <th>Rank</th>
       <th>Ticker</th>
       <th>Company</th>
       <th>Sector</th>
-      <th>Price in {{ from_year }}</th>
-      <th>Price in {{ to_year }}</th>
-      <th>Change</th>
+      <th class="text-right">Price in {{ from_year }}</th>
+      <th class="text-right">Price in {{ to_year }}</th>
+      <th class="text-right">Change</th>
     </tr>
   </thead>
 
   <tbody>
     {% for stock, industry_sector, avg_close_price_from, avg_close_price_to, price_change_percent in yeartoyear_price_percent_changes %}
     <tr>
+      <td>{{ loop.index }}</td>
       <td>{{ stock.ticker_symbol }}</td>
       <td>{{ stock.title }}</td>
       <td>{{ industry_sector.title }}</td>
-      <td>${{ avg_close_price_from }}</td>
-      <td>${{ avg_close_price_to }}</td>
-      <td>{{ price_change_percent }}%</td>
+      <td class="text-right">${{ avg_close_price_from }}</td>
+      <td class="text-right">${{ avg_close_price_to }}</td>
+      <td class="text-right text-{% if price_change_percent >= 0.0 %}success{% else %}danger{% endif %}">
+        {% if price_change_percent >= 0.0 %}+{% endif %}{{ "{:,.2f}".format(price_change_percent) }}%
+      </td>
     </tr>
     {% endfor %}{# stock, industry_sector, avg_close_price_from, avg_close_price_to, price_change_percent in yeartoyear_price_percent_changes #}
   </tbody>
