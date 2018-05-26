@@ -16,21 +16,21 @@ def yeartoyear_price_percent_change_query(exchange_id, from_year, to_year):
     syp_to_t = StockYearlyPrice.__table__.alias('syp_to')
 
     avg_close_price_from_col = text(
-        'ROUND(CAST(prices_from.avg_close_price AS numeric), 2) '
+        'ROUND(CAST(prices_from.avg_close_price AS numeric), 4) '
         'AS avg_close_price_from')
     avg_close_price_to_col = text(
-        'ROUND(CAST(prices_to.avg_close_price AS numeric), 2) '
+        'ROUND(CAST(prices_to.avg_close_price AS numeric), 4) '
         'AS avg_close_price_to')
     price_change_percent_col = text(
         'ROUND('
         '('
         '(prices_to.avg_close_price - prices_from.avg_close_price) / '
         'CASE prices_from.avg_close_price '
-        'WHEN 0.0 THEN 0.01 '
+        'WHEN 0.0 THEN 0.0001 '
         'ELSE prices_from.avg_close_price '
         'END) '
         '* 100.0, '
-        '2) AS price_change_percent')
+        '4) AS price_change_percent')
 
     stock_cols = [
         s_t.c.id, s_t.c.title, s_t.c.ticker_symbol, s_t.c.exchange_id,
@@ -79,8 +79,8 @@ def yeartoyear_price_percent_change_query(exchange_id, from_year, to_year):
             .select_from(from_query)
             .where(and_(
                 s_t.c.exchange_id == exchange_id,
-                text('ROUND(CAST(prices_from.avg_close_price AS numeric), 2) > 0.0'),
-                text('ROUND(CAST(prices_to.avg_close_price AS numeric), 2) > 0.0')))
+                text('ROUND(CAST(prices_from.avg_close_price AS numeric), 4) > 0.0'),
+                text('ROUND(CAST(prices_to.avg_close_price AS numeric), 4) > 0.0')))
             .group_by(*group_by_cols)
             .order_by(text('price_change_percent DESC')))
 
