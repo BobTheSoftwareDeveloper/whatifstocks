@@ -22,13 +22,9 @@ def yeartoyear_price_percent_change_query(exchange_id, from_year, to_year):
         'ROUND(CAST(prices_to.avg_close_price AS numeric), 4) '
         'AS avg_close_price_to')
     price_change_percent_col = text(
-        'ROUND('
-        '('
+        'ROUND(('
         '(prices_to.avg_close_price - prices_from.avg_close_price) / '
-        'CASE prices_from.avg_close_price '
-        'WHEN 0.0 THEN 0.0001 '
-        'ELSE prices_from.avg_close_price '
-        'END) '
+        'prices_from.avg_close_price) '
         '* 100.0, '
         '4) AS price_change_percent')
 
@@ -79,8 +75,8 @@ def yeartoyear_price_percent_change_query(exchange_id, from_year, to_year):
             .select_from(from_query)
             .where(and_(
                 s_t.c.exchange_id == exchange_id,
-                text('ROUND(CAST(prices_from.avg_close_price AS numeric), 4) > 0.0'),
-                text('ROUND(CAST(prices_to.avg_close_price AS numeric), 4) > 0.0')))
+                text('prices_to.avg_close_price > 0.0'),
+                text('prices_from.avg_close_price > 0.0')))
             .group_by(*group_by_cols)
             .order_by(text('price_change_percent DESC')))
 
